@@ -4465,6 +4465,56 @@ reload(demo)  # 会重新执行模块的导入操作
 
 
 
+### 9.1.3 相对导入
+
+![image-20240427012320582](./assets/image-20240427012320582.png)
+
+```python
+import sys
+
+import mypackage.my_son_package.son_logging as ll
+
+# 这个模块是 t1, 运行 python t1.py 这个模块
+
+"""
+在一般的项目当中,会将当前文件的所在的目录作为项目的根目录,通过sys.path可以查看全部的模块查找目录
+
+python中 package是一个特殊的 模块
+import mypackage.my_son_package.son_logging 这种多层级的目录导入
+会将 最外层的 mypackage 作为一个特殊的变量 赋值给 mypackage
+
+import mypackage.my_son_package.son_logging as ll
+这种导入方式会将 ll 指向最后一个模块的内存地址 ,而mypackage,my_son_package 不会被赋值
+"""
+print(sys.path)
+print(ll.a)
+```
+
+---
+
+```python
+from ..logging import name as a
+
+name = "son_logging"
+
+# 这个模块是 son_logging,  执行 python son_logging.py
+"""
+直接在当前模块执行相应的代码 ..loging 会将当前模块作为入口文件,
+而这样是无法找到其父 package 的,所以直接用相对目录导入会失败
+ImportError: attempted relative import with no known parent package
+
+而在t1模块运行,这个模块相对导入其他模块时,能通过相对路径找到其父 package,
+也就可以找到相对应的模块了,python的一切相对导包操作都是将相对路径转成绝对路径再导入相对应的包
+所以 在不知其父 package的情况下是无法相对导入的
+
+在一个包下面嵌套多个包,当需要使用超过两层以上的嵌套的模块时,相对导入就不适用了,这个时候采用绝对路径导入是正确做法
+"""
+```
+
+
+
+
+
 ## 9.2 mro
 
 ### 9.2.1 super()
@@ -4664,6 +4714,90 @@ class B(A):
 
 B().use_parent_method()
 ```
+
+
+
+### 9.3.4 总结
+
+```python
+class Animal(object):
+
+    def __init__(self, name):
+        print(f"Animal的初始化方法被调用{name}")
+
+
+class Mom(Animal):
+    def __init__(self, name):
+        super().__init__(name)
+        print(f"Mom初始化方法被调用{name}")
+
+
+class Father(Animal):
+    def __init__(self, name):
+        super().__init__(name)
+        print(f"Father的初始化方法被调用{name}")
+
+
+class Child(Mom, Father):
+    def __init__(self, name):
+        """
+        super().__init__(name)
+        这种方式调用的父类的方法, 根据 mro查找顺序 Child supper() -> Mom
+        所以输出结果是 :
+            Mom初始化方法被调用xx
+            Child的初始化方法被调用xx
+        """
+
+        """
+        super(Father, self).__init__(name)
+        这种方式调用父类方法,则把 Father 拿到 mro 顺序表查找,Father的下一个类对象是 Animal
+        所以 Animal 的 __init__ 会被调用 输出结果是:
+            Animal的初始化方法被调用xx
+            Child的初始化方法被调用xx
+        """
+
+        """
+        Father.__init__(self, name)
+        这种直接指定父类的方法的,不需要查找 mro 顺序表,直接找到对应的父类进行调用
+        所以 Father 的 __init__ 方法会被调用
+        """
+        super().__init__(name)
+        # super(Father, self).__init__(name)
+        # Father.__init__(self, name)
+        print(f"Child的初始化方法被调用{name}")
+
+
+"""
+(<class '__main__.Child'>, <class '__main__.Mom'>, \n 
+<class '__main__.Father'>, <class '__main__.Animal'>, <class 'object'>)
+"""
+
+# 使用 super() 调用父类方法能在类多继承的状态下,通过查找mro顺序表,能保证每个父类只被调用一次
+Child("xx")
+```
+
+```python
+class A(object):
+    regex = "AAA"
+
+    def show(self):
+        print(self.regex)
+
+
+class B(A):
+    def __init__(self, regex):
+        self.regex = regex
+
+
+"""
+因为子类 B 没有 show()方法,而B继承A,使用 B().show() 会调用父类 A类中的 show(self)
+此时的show(self) self 指的是 B类 的实例对象,所以 print(self.regex) ==>> print(B().regex)
+输出结果是 :  BBB
+"""
+B("BBB").show()
+```
+
+
 
 
 
@@ -5624,6 +5758,48 @@ class User(BaseClass):
 
 user = User(uid=111, name="linux", email="xxx@gmail.com", password="xe45vloacvb")
 user.save()
+```
+
+
+
+## 9.13 / & *
+
+```python
+"""
+/ 符号之前的所有参数，都必须以位置参数穿参，不可以关键字参数传参
+* 符号之后的所有参数，都必须以关键字方式传参，不得以位置方式传参
+"""
+def func1(a, b):
+    print(a, b)
+
+# 这两种方式都可以调用
+func1(a=2, b=1)  
+func1(2, 1)
+
+# -------------------------------
+
+def func2(a, b, /):
+    print(a, b)
+
+func2(1, 2)  # 只能采用位置参数调用func2
+# func2(a=1, 2), func2(a=1, b=2) # 这种就是错误的写法
+
+# -------------------------------
+
+def func3(a, b, *, c):  # * 之后的所有参数只能使用关键字参数
+    print(a, b, c)
+
+func3(1, 2, c=4)
+# func3(1, 2, 4)  这种写法就是错误的
+
+# -------------------------------
+
+def func4(a, b, /, *, c, d):
+    print(a, b, c, d)
+
+func4(1, 2, c=3, d=4)  # 只能采用这种方式 调用 func4
+# -------------------------------
+
 ```
 
 
